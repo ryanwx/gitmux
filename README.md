@@ -105,12 +105,14 @@ Usage:
 gitmux pull map --branch dev           # checkout fixed branch → pull
 gitmux pull map --branch prod:latest   # fetch → find newest matching branch → checkout → pull
 gitmux pull map --branch prod:260515   # replace * → checkout bInfinite-plan-260515 → pull
+gitmux pull map --branch prod:~260520  # fetch → find latest branch with date <= 260520 → checkout → pull
 gitmux pull --group base --branch dev  # checkout fixed branch for all repos in group
 ```
 
 Rules:
 - `--branch <alias>` — alias must be a fixed branch (no `*`), otherwise error
 - `--branch <alias>:latest` — alias must be a pattern (has `*`), picks newest by commit date
+- `--branch <alias>:~<date>` — alias must be a pattern, picks newest matching branch with date ≤ `<date>`
 - `--branch <alias>:<value>` — alias must be a pattern, replaces `*` with `<value>`
 
 ### Hook System
