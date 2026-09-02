@@ -6,7 +6,7 @@ from gitmux.models import GitmuxConfig, GroupConfig, RepoConfig
 
 
 def _make_config():
-    return GitmuxConfig(
+    return GitmuxConfig.of_groups(
         workspace="/tmp/test",
         groups=[
             GroupConfig(

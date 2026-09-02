@@ -37,6 +37,12 @@ def clone(url: str, dest: Path) -> GitResult:
     return _run(["git", "clone", url, str(dest)])
 
 
+def init(repo_path: Path) -> GitResult:
+    """Initialize a new empty git repository at repo_path."""
+    repo_path.mkdir(parents=True, exist_ok=True)
+    return _run(["git", "init", str(repo_path)])
+
+
 def pull(repo_path: Path) -> GitResult:
     return _run(["git", "pull"], cwd=repo_path)
 

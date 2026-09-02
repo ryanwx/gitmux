@@ -52,12 +52,13 @@ def test_load_config(tmp_path: Path):
 
 def test_load_missing_file(tmp_path: Path):
     config = load_config(tmp_path / "nonexistent.yaml")
-    assert config.workspace == "~/projects"
+    # workspace is None when unset → resolution falls back to registry / --workspace
+    assert config.workspace is None
     assert config.groups == []
 
 
 def test_save_and_reload(tmp_path: Path):
-    config = GitmuxConfig(
+    config = GitmuxConfig.of_groups(
         workspace="~/work",
         templates={"py-app": HookConfig(post_pull=["pip install -e ."])},
         groups=[
@@ -80,7 +81,7 @@ def test_save_and_reload(tmp_path: Path):
 
 
 def test_validate_duplicate_repo():
-    config = GitmuxConfig(
+    config = GitmuxConfig.of_groups(
         groups=[
             GroupConfig(name="a", repos=[RepoConfig(name="x", url="u1")]),
             GroupConfig(name="b", repos=[RepoConfig(name="x", url="u2")]),
@@ -91,7 +92,7 @@ def test_validate_duplicate_repo():
 
 
 def test_validate_duplicate_group():
-    config = GitmuxConfig(
+    config = GitmuxConfig.of_groups(
         groups=[
             GroupConfig(name="a", repos=[]),
             GroupConfig(name="a", repos=[]),
@@ -102,7 +103,7 @@ def test_validate_duplicate_group():
 
 
 def test_validate_unknown_template():
-    config = GitmuxConfig(
+    config = GitmuxConfig.of_groups(
         groups=[
             GroupConfig(
                 name="g",
@@ -117,7 +118,7 @@ def test_validate_unknown_template():
 
 
 def test_validate_valid_config():
-    config = GitmuxConfig(
+    config = GitmuxConfig.of_groups(
         templates={"t": HookConfig()},
         groups=[
             GroupConfig(
@@ -146,14 +147,16 @@ def test_find_config_fallback_home(tmp_path: Path, monkeypatch):
     assert result == Path.home() / ".gitmux.yaml"
 
 
-
 def test_save_and_load_branches(tmp_path: Path):
     """Test branches field is saved and loaded correctly."""
-    config = GitmuxConfig(
+    config = GitmuxConfig.of_groups(
         groups=[
-            GroupConfig(name="g", repos=[
-                RepoConfig(name="r", url="u", branches={"prod": "app-plan-*", "dev": "app-dev-main"}),
-            ]),
+            GroupConfig(
+                name="g",
+                repos=[
+                    RepoConfig(name="r", url="u", branches={"prod": "app-plan-*", "dev": "app-dev-main"}),
+                ],
+            ),
         ],
     )
     cfg_file = tmp_path / "cfg.yaml"
@@ -162,15 +165,16 @@ def test_save_and_load_branches(tmp_path: Path):
     assert loaded.groups[0].repos[0].branches == {"prod": "app-plan-*", "dev": "app-dev-main"}
 
 
-
 def test_get_repos_default_group(tmp_path: Path):
     """Test that bare repo name resolves to default group."""
     from gitmux.models import GitmuxConfig, GroupConfig, RepoConfig
 
-    cfg = GitmuxConfig(groups=[
-        GroupConfig(name="default", repos=[RepoConfig(name="myrepo", url="u")]),
-        GroupConfig(name="other", repos=[RepoConfig(name="other-repo", url="u2")]),
-    ])
+    cfg = GitmuxConfig.of_groups(
+        groups=[
+            GroupConfig(name="default", repos=[RepoConfig(name="myrepo", url="u")]),
+            GroupConfig(name="other", repos=[RepoConfig(name="other-repo", url="u2")]),
+        ]
+    )
     cfg_file = tmp_path / ".gitmux.yaml"
     save_config(cfg, cfg_file)
     loaded = load_config(cfg_file)
@@ -182,13 +186,65 @@ def test_get_repos_default_group(tmp_path: Path):
 
 def test_config_with_default_group_roundtrip(tmp_path: Path):
     """Test that default group is preserved through save/load."""
-    cfg = GitmuxConfig(groups=[
-        GroupConfig(name="default", repos=[
-            RepoConfig(name="app", url="https://example.com/app.git"),
-        ]),
-    ])
+    cfg = GitmuxConfig.of_groups(
+        groups=[
+            GroupConfig(
+                name="default",
+                repos=[
+                    RepoConfig(name="app", url="https://example.com/app.git"),
+                ],
+            ),
+        ]
+    )
     cfg_file = tmp_path / "cfg.yaml"
     save_config(cfg, cfg_file)
     loaded = load_config(cfg_file)
     assert loaded.groups[0].name == "default"
     assert loaded.groups[0].repos[0].name == "app"
+
+
+def test_markets_config_load_and_layout(tmp_path: Path):
+    """A config using the markets layer loads and resolves the 4-segment path."""
+    cfg_file = tmp_path / "m.yaml"
+    cfg_file.write_text(
+        "workspace: /ws\n"
+        "markets:\n"
+        "  mastercard:\n"
+        "    groups:\n"
+        "      rebate:\n"
+        "        repos:\n"
+        "          - name: bonus\n"
+        "            url: https://x/mastercard/rebate/bonus.git\n"
+        "            branches: { prod: 'bonus-plan-*' }\n",
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.has_markets is True
+    grp = cfg.groups[0]
+    assert grp.market == "mastercard"
+    repo = grp.repos[0]
+    assert str(cfg.get_repo_path(repo, grp)) == "/ws/mastercard/rebate/bonus"
+
+
+def test_markets_config_roundtrip(tmp_path: Path):
+    """Load a markets config, save it, reload — structure preserved."""
+    src = tmp_path / "m.yaml"
+    src.write_text(
+        "workspace: /ws\n"
+        "markets:\n"
+        "  mc:\n"
+        "    groups:\n"
+        "      base:\n"
+        "        repos:\n"
+        "          - name: map\n"
+        "            url: u\n",
+        encoding="utf-8",
+    )
+    cfg = load_config(src)
+    out = tmp_path / "out.yaml"
+    save_config(cfg, out)
+    reloaded = load_config(out)
+    assert reloaded.has_markets is True
+    assert reloaded.groups[0].market == "mc"
+    assert reloaded.groups[0].name == "base"
+    assert reloaded.groups[0].repos[0].name == "map"

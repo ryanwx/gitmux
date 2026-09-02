@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gitmux"
-version = "0.1.1"
+version = "0.2.0"
 description = "Manage multiple git repositories with ease"
 readme = "README.md"
 license = "MIT"
@@ -35,9 +35,13 @@ dev = [
     "pytest-mock==3.14.0",
     "ruff==0.11.12",
 ]
+mcp = [
+    "mcp>=2.0.0",
+]
 
 [project.scripts]
 gitmux = "gitmux.cli:app"
+gitmux-mcp = "gitmux.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/ryan/gitmux"
